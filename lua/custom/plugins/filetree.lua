@@ -12,5 +12,6 @@ return {
     -- Add keymaps for Neotree
     vim.keymap.set('n', '<leader>e', '<cmd>Neotree position=current toggle<cr>', { desc = 'Toggle Neotree' })
     vim.keymap.set('n', '<leader>E', '<cmd>Neotree focus<cr>', { desc = 'Focus Neotree ' })
+    vim.keymap.set('n', '<leader>eg', '<cmd>Neotree git_status position=current<cr>', { desc = 'Neotree git status' })
   end,
 }
