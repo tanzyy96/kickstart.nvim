@@ -1,4 +1,8 @@
 # kickstart.nvim
+Blablabla but these are my stuff for kickstart. Supports:
+- gopls
+- vue + tsserver
+- pyright
 
 ## Introduction
 
