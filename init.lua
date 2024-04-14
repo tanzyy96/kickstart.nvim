@@ -199,6 +199,14 @@ vim.api.nvim_create_autocmd('BufWritePre', {
   end,
 })
 
+-- Autoformat on save for Vue
+vim.api.nvim_create_autocmd('BufWritePre', {
+  pattern = '*.vue',
+  callback = function(args)
+    require('conform').format { bufnr = args.buf }
+  end,
+})
+
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
@@ -312,11 +320,13 @@ require('lazy').setup({
         end,
       },
       { 'nvim-telescope/telescope-ui-select.nvim' },
+      'mollerhoj/telescope-recent-files.nvim',
 
       -- Useful for getting pretty icons, but requires a Nerd Font.
       { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
     },
     config = function()
+      require('telescope').load_extension 'recent-files'
       -- Telescope is a fuzzy finder that comes with a lot of different things that
       -- it can fuzzy find! It's more than just a "file finder", it can search
       -- many different aspects of Neovim, your workspace, LSP, and more!
@@ -363,7 +373,10 @@ require('lazy').setup({
       local builtin = require 'telescope.builtin'
       vim.keymap.set('n', '<leader>sh', builtin.help_tags, { desc = '[S]earch [H]elp' })
       vim.keymap.set('n', '<leader>sk', builtin.keymaps, { desc = '[S]earch [K]eymaps' })
-      vim.keymap.set('n', '<leader>sf', builtin.find_files, { desc = '[S]earch [F]iles' })
+      -- vim.keymap.set('n', '<leader>sf', builtin.find_files, { desc = '[S]earch [F]iles' })
+      vim.keymap.set('n', '<leader>sf', function()
+        require('telescope').extensions['recent-files'].recent_files {}
+      end, { desc = '[S]earch [F]iles', noremap = true, silent = true })
       vim.keymap.set('n', '<leader>ss', builtin.builtin, { desc = '[S]earch [S]elect Telescope' })
       vim.keymap.set('n', '<leader>sw', builtin.grep_string, { desc = '[S]earch current [W]ord' })
       vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })
@@ -403,7 +416,8 @@ require('lazy').setup({
       'williamboman/mason.nvim',
       'williamboman/mason-lspconfig.nvim',
       'WhoIsSethDaniel/mason-tool-installer.nvim',
-
+      'pmizio/typescript-tools.nvim',
+      'lvimuser/lsp-inlayhints.nvim',
       -- Useful status updates for LSP.
       -- NOTE: `opts = {}` is the same as calling `require('fidget').setup({})`
       { 'j-hui/fidget.nvim', opts = {} },
@@ -535,9 +549,29 @@ require('lazy').setup({
       local servers = {
         -- clangd = {},
         gopls = {
+          on_attach = function(c, b)
+            -- Enable inlay hints
+            -- require('inlay-hints').on_attach(c, b)
+            require('lsp-inlayhints').on_attach(c, b)
+          end,
+          formatting = {
+            gofumpt = true,
+            semanticTokens = true,
+          },
           settings = {
             gopls = {
+              diagnosticsTrigger = 'Edit',
               gofumpt = true,
+              staticcheck = true,
+              hints = {
+                assignVariableTypes = true,
+                compositeLiteralFields = true,
+                compositeLiteralTypes = true,
+                constantValues = true,
+                functionTypeParameters = true,
+                parameterNames = true,
+                rangeVariableTypes = true,
+              },
             },
           },
         },
@@ -549,18 +583,37 @@ require('lazy').setup({
         --    https://github.com/pmizio/typescript-tools.nvim
         --
         -- But for many setups, the LSP (`tsserver`) will work just fine
-        tsserver = {
-          init_options = {
-            hostInfo = 'neovim',
-            plugins = {
-              {
-                name = '@vue/typescript-plugin',
-                location = '/usr/local/lib',
-                languages = {
-                  'typescript',
-                  'vue',
-                },
-              },
+
+        -- tsserver = {
+        --   init_options = {
+        --     hostInfo = 'neovim',
+        --     plugins = {
+        --       {
+        --         name = '@vue/typescript-plugin',
+        --         location = '/usr/local/lib',
+        --         languages = {
+        --           'typescript',
+        --           'vue',
+        --         },
+        --       },
+        --     },
+        --   },
+        --   filetypes = {
+        --     'javascript',
+        --     'typescript',
+        --     'vue',
+        --   },
+        -- },
+        --
+        -- Working copy to make typescript-tools work for vue, but its no better than tsserver
+        volar = {
+          on_attach = function(client)
+            client.server_capabilities.semanticTokensProvider = false
+          end,
+          settings = {
+            expose_as_code_actions = 'all',
+            tsserver_plugins = {
+              '@vue/typescript-plugin',
             },
           },
           filetypes = {
@@ -569,7 +622,6 @@ require('lazy').setup({
             'vue',
           },
         },
-        --
 
         lua_ls = {
           -- cmd = {...},
@@ -602,6 +654,7 @@ require('lazy').setup({
         'stylua', -- Used to format Lua code
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
+      require('lsp-inlayhints').setup {}
 
       require('mason-lspconfig').setup {
         handlers = {
@@ -611,7 +664,11 @@ require('lazy').setup({
             -- by the server configuration above. Useful when disabling
             -- certain features of an LSP (for example, turning off formatting for tsserver)
             server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
-            require('lspconfig')[server_name].setup(server)
+            if server_name == 'volar' then
+              require('typescript-tools').setup(server)
+            else
+              require('lspconfig')[server_name].setup(server)
+            end
           end,
         },
       }
@@ -650,7 +707,8 @@ require('lazy').setup({
         --
         -- You can use a sub-list to tell conform to run *until* a formatter
         -- is found.
-        -- javascript = { { "prettierd", "prettier" } },
+        javascript = { { 'prettierd', 'prettier' } },
+        vue = { { 'prettierd', 'prettier' } },
       },
     },
   },
@@ -830,7 +888,7 @@ require('lazy').setup({
         -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
         --  If you are experiencing weird indenting issues, add the language to
         --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby' },
+        additional_vim_regex_highlighting = 'all',
       },
       indent = { enable = true, disable = { 'ruby' } },
     },
